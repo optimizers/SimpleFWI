@@ -27,11 +27,11 @@ function [f,g,H] = misfit(m,D,alpha,model)
 
 %% get matrices
 m = m(:);
-L = getL(model.h,model.n);
-A = getA(model.f,m,model.h,model.n);
-P = getP(model.h,model.n,model.zr,model.xr);
-Q = getP(model.h,model.n,model.zs,model.xs);
-G = @(u)getG(model.f,m,u,model.h,model.n);
+L = getL(model.h,model.n);  % difference matrix for regularization
+A = getA(model.f,m,model.h,model.n); % helmholz operator
+P = getP(model.h,model.n,model.zr,model.xr); % sampling operator
+Q = getP(model.h,model.n,model.zs,model.xs); % from source positions
+G = @(u)getG(model.f,m,u,model.h,model.n); %jacobian applied to u.
 
 %% forward solve
 U = A\Q;
@@ -43,23 +43,32 @@ f = .5*norm(P'*U - D,'fro')^2 + .5*alpha*norm(L*m)^2;
 V = A'\(P*(D - P'*U));
 
 %% compute g
-g = alpha*(L'*L)*m;
+if(nargout > 1)
+    g = alpha*(L'*L)*m;
 
-for k = 1:size(U,2)
-    g = g + real(G(U(:,k))'*V(:,k));
+    for k = 1:size(U,2)
+        g = g + real(G(U(:,k))'*V(:,k));
+    end
+else
+    g= [];
 end
 
 %% get H
-H = @(x)Hmv(x,m,U,alpha,model);
-
+if(nargout > 2)
+    Hfun = @(x,mode)Hmv(x,m,U,alpha,model);
+    nvars = size(m,1);
+    H = opFunction(nvars, nvars, Hfun);
+else
+    H =[];
+end
 end
 
 function y = Hmv(x,m,U,alpha,model)
 %% get matrices
-L = getL(model.h,model.n);
-A = getA(model.f,m,model.h,model.n);
-P = getP(model.h,model.n,model.zr,model.xr);
-G = @(u)getG(model.f,m,u,model.h,model.n);
+L = getL(model.h,model.n);  % difference matrix (for regularization)
+A = getA(model.f,m,model.h,model.n); % Helmholz operator
+P = getP(model.h,model.n,model.zr,model.xr); % sampling operator
+G = @(u)getG(model.f,m,u,model.h,model.n); % jacobian of A applied to u
 
 %% compute mat-vec
 y = alpha*(L'*L)*x;
